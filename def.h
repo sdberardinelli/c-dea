@@ -12,4 +12,12 @@
 // ==
 #define EQ 4
 
+#define EPS 1.0000000133514320E-010
+
+#define LP_MAXIMIZATION 1
+
+#define LP_MINIZATION 2
+
+#define LP_OPTIMIZATION 0
+
 #endif

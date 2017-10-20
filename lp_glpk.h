@@ -2,6 +2,6 @@
 #define LP_GLPK_H
 #include "util.h"
 
-void lp_glpk ( dea_obj * );
+output_obj lp_glpk ( dea_obj * );
 
 #endif

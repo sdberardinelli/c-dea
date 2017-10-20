@@ -4,8 +4,7 @@
 #include "util.h"
 #include "def.h"
 
-char** str_split( char* str, char delim, int* num_splits )
-{
+char** str_split( char* str, char delim, int* num_splits ) {
     char** ret;
     int ret_len;
     char* c;
@@ -60,21 +59,110 @@ char** str_split( char* str, char delim, int* num_splits )
     return ret;
 }
 
-void* _alloc ( size_t n, size_t t)
-{
+void* _alloc ( size_t n, size_t t) {
     return malloc(n*t);
 }
 
-void _free( void * a )
-{
+int * alloc_init_int_array(size_t n, int value) {
+    int * ptr;
+    ptr = (int*)_alloc(n,sizeof(int));
+    _init_int_array(ptr,n,value);
+    return ptr;
+}
+
+int ** alloc_init_int_array2d(size_t n, size_t m, int value) {
+    int ** ptr;
+    ptr = (int**)_alloc2d(n,m,sizeof(int));
+    _init_int_array2d(ptr,n,m,value);
+    return ptr;
+}
+
+float * alloc_init_float_array(size_t n, float value) {
+    float * ptr;
+    ptr = (float*)_alloc(n,sizeof(float));
+    _init_float_array(ptr,n,value);
+    return ptr;
+}
+
+float ** alloc_init_float_array2d(size_t n, size_t m, float value) {
+    float ** ptr;
+    ptr = (float**)_alloc2d(n,m,sizeof(float));
+    _init_float_array2d(ptr,n,m,value);
+    return ptr;
+}
+
+double * alloc_init_double_array(size_t n, double value) {
+    double * ptr;
+    ptr = (double*)_alloc(n,sizeof(double));
+    _init_double_array(ptr,n,value);
+    return ptr;
+}
+
+double ** alloc_init_double_array2d(size_t n, size_t m, double value) {
+    double ** ptr;
+    ptr = (double**)_alloc2d(n,m,sizeof(double));
+    _init_double_array2d(ptr,n,m,value);
+    return ptr;
+}
+
+void* _resize(void *a, size_t n, size_t t) {
+    void * ptr;
+    ptr = _alloc(n,t);
+    memcpy(ptr,a,n*t);
+    _free(a);
+    return ptr;
+}
+
+void _init_int_array(int *a, size_t n, int value) {
+    int i;
+    for ( i = 0; i < n; i++ ) {
+        a[i] = value;
+    }
+}
+
+void _init_float_array(float *a, size_t n, float value) {
+    int i;
+    for ( i = 0; i < n; i++ ) {
+        a[i] = value;
+    }
+}
+
+void _init_double_array(double *a, size_t n, double value) {
+    int i;
+    for ( i = 0; i < n; i++ ) {
+        a[i] = value;
+    }
+}
+
+void _init_float_array2d(float **a, size_t n, size_t m, float value) {
+    int i;
+    for ( i = 0; i < n; i++ ) {
+        _init_float_array(a[i],m,value);
+    }
+}
+
+void _init_double_array2d(double **a, size_t n, size_t m, double value) {
+    int i;
+    for ( i = 0; i < n; i++ ) {
+        _init_double_array(a[i],m,value);
+    }
+}
+
+void _init_int_array2d(int **a, size_t n, size_t m, int value) {
+    int i;
+    for ( i = 0; i < n; i++ ) {
+        _init_int_array(a[i],m,value);
+    }
+}
+
+void _free( void * a ) {
     if (a)
     {
         free(a);
     }
 }
 
-void** _alloc2d ( size_t n, size_t m, size_t t)
-{
+void** _alloc2d ( size_t n, size_t m, size_t t) {
     int i;
     void ** arr;
     arr = malloc(n*m*t);
@@ -105,44 +193,66 @@ void init_dea_obj( dea_obj * obj ) {
     obj->nobjvals = 0;
     obj->ncons = 0;
     obj->objtype = 0;
-    obj->rhs_values = 0;
-    obj->const_signs = NULL;
-    obj->obj_coeffs = NULL;
+    obj->rhs = 0;
+    obj->rest = NULL;
+    obj->objvals = NULL;
     obj->A = NULL;
 }
 
 void free_dea_obj( dea_obj * obj ) {
-    if (obj->rhs_values) {
-        _free(obj->rhs_values);
+    if (obj->rhs) {
+        _free(obj->rhs);
     }
-    if ( obj->const_signs ) {
-        _free(obj->const_signs);
+    if ( obj->rest ) {
+        _free(obj->rest);
     }
-    if ( obj->obj_coeffs ) {
-        _free(obj->obj_coeffs);
+    if ( obj->objvals ) {
+        _free(obj->objvals);
     }
     if ( obj->A ) {
         _free2d((void**)obj->A,(size_t)obj->ncons);
     }
 }
 
-void display_dea_obj( dea_obj * obj ){
+void init_output_obj( output_obj * obj ) {
+    obj->nruntimes = 0;
+    obj->runtimes = NULL;
+    obj->nsoln = 0;
+    obj->soln = NULL;
+    obj->nEFFscores = 0;
+    obj->mEFFscores = 0;
+    obj->EFFscores = NULL;
+}
+
+void free_output_obj( output_obj * obj ) {
+    if (obj->runtimes) {
+        _free(obj->runtimes);
+    }
+    if ( obj->soln ) {
+        _free(obj->soln);
+    }
+    if ( obj->EFFscores ) {
+        _free2d((void**)obj->EFFscores,(size_t)obj->nEFFscores);
+    }
+}
+
+void display_dea_obj( dea_obj * obj ) {
 
     int i, j;
     printf("-----------\n");
     printf("%d\n", obj->objtype);
     printf("%d %d %d\n", obj->nDMU, obj->nY, obj->nX);
     printf("%d\n", obj->nobjvals);
-    if (obj->obj_coeffs) {
+    if (obj->objvals) {
         for (i = 0; i < obj->nobjvals; i++) {
-            printf("%d ", obj->obj_coeffs[i]);
+            printf("%f ", obj->objvals[i]);
         }
         printf("\n");
     }
     printf("%d\n", obj->ncons);
-    if (obj->const_signs) {
+    if (obj->rest) {
         for (i = 0; i < obj->nobjvals; i++) {
-            switch ( obj->const_signs[i] )
+            switch ( obj->rest[i] )
             {
                 case LTE: { printf("<="); } break;
                 case GTE: { printf(">="); } break;
@@ -155,9 +265,9 @@ void display_dea_obj( dea_obj * obj ){
         }
         printf("\n");
     }
-    if (obj->rhs_values) {
+    if (obj->rhs) {
         for (i = 0; i < obj->ncons; i++) {
-            printf("%d ", obj->rhs_values[i]);
+            printf("%f ", obj->rhs[i]);
         }
         printf("\n");
     }
@@ -170,6 +280,64 @@ void display_dea_obj( dea_obj * obj ){
         }
         printf("\n");
     }
+}
+
+void display_output_obj( output_obj * obj ) {
+    int i, j;
+    printf("-----------\n");
+    printf("%lf\n", obj->obj);
+    printf("%d\n", obj->nruntimes);
+    if (obj->runtimes) {
+        for (i = 0; i < obj->nruntimes; i++) {
+            printf("%lf ", obj->runtimes[i]);
+        }
+        printf("\n");
+    }
+    printf("%d\n", obj->nsoln);
+    if (obj->soln) {
+        for (i = 0; i < obj->nsoln; i++) {
+            printf("%lf ", obj->soln[i]);
+        }
+        printf("\n");
+    }
+
+    printf("%d %d\n", obj->nEFFscores, obj->mEFFscores);
+    if (obj->EFFscores) {
+        for (i = 0; i < obj->nEFFscores; i++) {
+            for (j = 0; j < obj->mEFFscores; j++) {
+                printf("%f ", obj->EFFscores[i][j]);
+            }
+            printf("\n");
+        }
+        printf("\n");
+    }
+}
+
+void write_output_obj( output_obj * obj, const char * filename ) {
+    FILE * file;
+
+    file = fopen(filename,"w");
+
+    fprintf(file, "DEA,QDEA1,QDEA2,\n");
+
+    int i, j;
+    if (obj->EFFscores) {
+        for (i = 0; i < obj->nEFFscores; i++) {
+            for (j = 0; j < obj->mEFFscores; j++) {
+                fprintf(file, "%lf,",obj->EFFscores[i][j]);
+            }
+            fprintf(file, "\n");
+        }
+    }
+
+    fclose(file);
+}
+
+void* copy_array(void* ar,size_t n, size_t t) {
+    void * ptr;
+    ptr = _alloc(n,t);
+    memcpy(ptr,ar,n*t);
+    return ptr;
 }
 
 dea_obj process_file(const char* filename) {
@@ -227,9 +395,9 @@ dea_obj process_file(const char* filename) {
             if (obj.nobjvals) {
                 arr = str_split(line,',',&i);
                 if ( i == obj.nobjvals ) {
-                    obj.obj_coeffs = (int *)_alloc((size_t)obj.nobjvals, sizeof(int));
+                    obj.objvals = (float *)_alloc((size_t)obj.nobjvals, sizeof(float));
                     for ( j = 0; j < i; j++ ) {
-                        obj.obj_coeffs[j] = (int) strtol(arr[j], NULL, 10);
+                        obj.objvals[j] = strtof(arr[j], NULL);
                     }
                 }
                 _free(arr);
@@ -245,25 +413,31 @@ dea_obj process_file(const char* filename) {
             rm_newline(line, read);
             if (obj.nobjvals) {
                 arr = str_split(line,',',&i);
-                if ( i == obj.nobjvals ) {
-                    obj.const_signs = (int *)_alloc((size_t)obj.nobjvals, sizeof(int));
+                if (i == obj.nobjvals || i == obj.ncons) {
+                    obj.rest = (int *)_alloc((size_t)i, sizeof(int));
                     for ( j = 0; j < i; j++ ) {
                         if (strcmp(arr[j], "\"<=\"") == 0) {
-                            obj.const_signs[j] = LTE;
+                            obj.rest[j] = LTE;
                         }
                         else if (strcmp(arr[j], "\">=\"") == 0) {
-                            obj.const_signs[j] = GTE;
+                            obj.rest[j] = GTE;
                         }
                         else if (strcmp(arr[j], "\">\"") == 0) {
-                            obj.const_signs[j] = GT;
+                            obj.rest[j] = GT;
                         }
                         else if (strcmp(arr[j], "\"<\"") == 0) {
-                            obj.const_signs[j] = LT;
+                            obj.rest[j] = LT;
                         }
                         else if (strcmp(arr[j], "\"==\"") == 0) {
-                            obj.const_signs[j] = EQ;
+                            obj.rest[j] = EQ;
                         }
                     }
+                }
+                else {
+                    printf("---> ERROR: ");
+                    printf("\"nobjvals\" did not match number of \"const signs\"\n");
+                    printf("nobjvals = %d\n\nncos = %d\nfound %d\n",obj.nobjvals,obj.ncons,i);
+                    exit(-1);
                 }
                 _free(arr);
             }
@@ -273,9 +447,9 @@ dea_obj process_file(const char* filename) {
             rm_newline(line, read);
             arr = str_split(line,',',&i);
             if (i == obj.ncons) {
-                obj.rhs_values = (int *) _alloc((size_t)i, sizeof(int));
+                obj.rhs = (float *) _alloc((size_t)i, sizeof(float));
                 for (j = 0; j < i; j++) {
-                    obj.rhs_values[j] = (int) strtol(arr[j], (char **)NULL, 10);
+                    obj.rhs[j] = strtof(arr[j], (char **)NULL);
                 }
             }
             _free(arr);
@@ -306,38 +480,4 @@ dea_obj process_file(const char* filename) {
     }
 
     return obj;
-}
-
-void test_ (void )
-{
-    int i, j;
-    int ** arr;
-
-    arr = (int**)_alloc2d(10,10,sizeof(int));
-
-    for ( i = 0; i < 10; i++ ) {
-        for ( j = 0; j < 10; j++ ) {
-            arr[i][j] = i+1+j;
-        }
-    }
-
-    for ( i = 0; i < 10; i++ ) {
-        for ( j = 0; j < 10; j++ ) {
-            printf("%d ", arr[i][j]);
-        }
-        printf("\n");
-    }
-
-    _free2d((void**)arr,10);
-
-
-    int * array;
-
-    array = (int*)_alloc(10,sizeof(int));
-
-    for ( i = 0; i < 10; i++ )
-    {
-        array[i] = i+1;
-    }
-    _free(array);
 }

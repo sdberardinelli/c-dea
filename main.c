@@ -1,16 +1,23 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include "lp_glpk.h"
-#include "util.h"
 
 
 int main ( int argc, char * argv[] ) {
-    dea_obj obj;
+    dea_obj dea;
+    output_obj output;
 
-    obj = process_file("../examples/GLPKdata-CCR-example.txt");
+    dea = process_file("../examples/GLPKdata.txt");
 
-    lp_glpk(&obj);
+    output = lp_glpk(&dea);
 
-    free_dea_obj(&obj);
+    printf("Runtime 1 = %lf\n", output.runtimes[0]);
+    printf("Runtime 2 = %lf\n", output.runtimes[1]);
+
+    write_output_obj(&output,"EFFscores.csv");
+
+    free_dea_obj(&dea);
+    free_output_obj(&output);
 
     exit(EXIT_SUCCESS);
 }
