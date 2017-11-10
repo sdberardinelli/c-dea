@@ -6,11 +6,11 @@
 // >=
 #define GTE 1
 // <
-#define LT 2
+#define LST 2
 // >
-#define GT 3
+#define GRT 3
 // ==
-#define EQ 4
+#define EQUAL 4
 
 #define EPS 1.0000000133514320E-010
 

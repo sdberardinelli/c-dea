@@ -1,15 +1,15 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
-#include <glpk.h>
-#include "lp_glpk.h"
+#include <lpsolve/lp_lib.h>
+#include "lp_lp_solve.h"
 #include "def.h"
 
 #define _DEA 1
 #define _QDEA 1
 #define _DEA2 1
 
-output_obj lp_glpk ( dea_obj * object ) {
+output_obj lp_lp_solve ( dea_obj * object ) {
     int nc, nr, nDMU, nY, nX;
     int *rest;
     float *objvals, *rhs;
@@ -20,30 +20,25 @@ output_obj lp_glpk ( dea_obj * object ) {
 
     float *objvalsD, *rhsD, **AD;
     double *arD;
-    int *restD, *iaD, *jaD, *ijconrowD;
+    int *restD, *ijconrowD, *iconrowD, *jconrowD;
     int nrD, ncD, kD;
-    glp_prob * dea;
-    glp_smcp parmD;
+    lprec * dea;
 
     clock_t t1, t2, t3;
     FILE *file;
 
     double *ar;
-    int *ia, *ja, *ijconrowQ;
+    int *ijconrowQ, *iconrowQ, *jconrowQ;
     int kQ;
-    glp_prob * qdea;
-    glp_smcp parmQ;
+    lprec * qdea;
 
     float *rhsD2, **AD2;
     double *arD2;
     int *restD2, *iaD2, *jaD2;
     int nrD2, kD2;
-    glp_prob * dea2;
-    glp_smcp parmD2;
+    lprec * dea2;
 
-    int i, j, k, ret, itmp, jDMU, jcount, jtmp, jtmp1, jtmp2, dstart, dend, dcount, ndea2;
-
-    float z8;
+    int i, j, k, itmp, ret, jDMU, jcount, jtmp, jtmp1, jtmp2, dstart, dend, dcount, ndea2;
 
     double obj, objD, objD2;
 
@@ -69,7 +64,7 @@ output_obj lp_glpk ( dea_obj * object ) {
     output.nruntimes = 2;
     output.runtimes =  alloc_init_double_array((size_t)output.nruntimes, 0.0);
     output.nsoln = nc;
-    output.soln = alloc_init_double_array((size_t)output.nsoln, 0.0);
+    output.soln = alloc_init_double_array((size_t)output.nsoln*2, 0.0);
 
 
     double ** EFFscores;
@@ -78,8 +73,6 @@ output_obj lp_glpk ( dea_obj * object ) {
     EFFscores = output.EFFscores;
     soln = output.soln;
     runtimes = output.runtimes;
-
-    z8 = 0.0;
 
     nYX = nY + nX;
     nDMUp1 = nDMU+1;
@@ -96,18 +89,17 @@ output_obj lp_glpk ( dea_obj * object ) {
     rhsD = (float*)copy_array(rhs,(size_t)nDMUp1,sizeof(float));
     AD = (float**)copy_array(A,((size_t)nDMUp1*nYX),sizeof(float));
 
-    ret = glp_term_out(GLP_MSG_OFF);
-
-    dea = glp_create_prob();
+    dea = make_lp(nrD+1,ncD+1);
+    set_verbose(dea, IMPORTANT);
 #if _DEA
     {
         switch (objtype) {
             case LP_MAXIMIZATION: {
-                glp_set_obj_dir(dea, GLP_MAX);
+                set_maxim(dea);
             }
                 break;
             case LP_MINIZATION: {
-                glp_set_obj_dir(dea, GLP_MIN);
+                set_minim(dea);
             }
                 break;
             case LP_OPTIMIZATION: { ;
@@ -117,36 +109,38 @@ output_obj lp_glpk ( dea_obj * object ) {
             }
                 break;
         }
-        ret = glp_add_rows(dea, nrD);
 
         for (i = 0; i < nrD; i++) {
-            switch (rest[i]) {
+            switch (restD[i]) {
                 case LTE: {
-                    glp_set_row_bnds(dea, i + 1, GLP_UP, z8, rhsD[i]);
+                    ret = set_constr_type(dea,i+1,LE);
+                    if ( ret != TRUE ) {
+                        printf("dea: set_constr_type failed : %d\n", ret);
+                    }
                 }
                     break;
                 case GTE: {
-                    glp_set_row_bnds(dea, i + 1, GLP_LO, z8, rhsD[i]);
+                    ret = set_constr_type(dea,i+1,GE);
+                    if ( ret != TRUE ) {
+                        printf("dea: set_constr_type failed : %d\n", ret);
+                    }
                 }
                     break;
                 default: { ;
                 }
                     break;
             }
-        }
-
-        ret = glp_add_cols(dea, ncD);
-
-        for (j = 0; j < ncD; j++) {
-            glp_set_obj_coef(dea, j + 1, objvalsD[j]);
-            glp_set_col_bnds(dea, j + 1, GLP_LO, z8, z8);
+            ret = set_rh(dea,i+1,rhsD[i]);
+            if ( ret != TRUE ) {
+                printf("dea: set_rh failed : %d\n", ret);
+            }
         }
 
         k = (nDMU + 1) * (nY + nX) + 1;
         arD = alloc_init_double_array((size_t) k, 0.0);
-        iaD = alloc_init_int_array((size_t) k, 0);
-        jaD = alloc_init_int_array((size_t) k, 0);
         ijconrowD = alloc_init_int_array((size_t) nrD * ncD, 0);
+        iconrowD = alloc_init_int_array((size_t) nrD * ncD, 0);
+        jconrowD = alloc_init_int_array((size_t) nrD * ncD, 0);
 
         itmp = 0;
         kD = 0;
@@ -154,33 +148,44 @@ output_obj lp_glpk ( dea_obj * object ) {
             for (j = 0; j < ncD; j++) {
                 if (fabsf(AD[i][j]) > EPS) {
                     kD++;
-                    iaD[kD] = i + 1;
-                    jaD[kD] = j + 1;
                     arD[kD] = (double) AD[i][j];
                     if (i + 1 == nDMUp1 && j + 1 > nY && j + 1 <= (nY + nX)) {
                         ijconrowD[itmp] = kD;
+                        iconrowD[itmp] = i+1;
+                        jconrowD[itmp] = j+1;
                         itmp++;
+                    }
+                    ret = set_mat(dea,i+1,j+1,arD[kD]);
+                    if ( ret != TRUE ) {
+                        printf("dea: set_mat failed : %d\n", ret);
                     }
                 }
             }
         }
         ijconrowD = (int *) _resize(ijconrowD, (size_t) itmp, sizeof(int));
+        iconrowD = (int *) _resize(iconrowD, (size_t) itmp, sizeof(int));
+        jconrowD = (int *) _resize(jconrowD, (size_t) itmp, sizeof(int));
 
-        glp_load_matrix(dea, kD, iaD, jaD, arD);
-        glp_init_smcp(&parmD);
+        for ( j = 0; j < ncD; j++ ) {
+            ret = set_obj(dea, j+1, objvalsD[j]);
+            if ( ret != TRUE ) {
+                printf("dea: set_obj failed : %d\n", ret);
+            }
+        }
     }
 #endif
 
-    qdea = glp_create_prob();
+    qdea = make_lp(nr+1,nc+1);
+    set_verbose(qdea,IMPORTANT);
 #if _QDEA
     {
         switch (objtype) {
             case LP_MAXIMIZATION: {
-                glp_set_obj_dir(qdea, GLP_MAX);
+                set_maxim(qdea);
             }
                 break;
             case LP_MINIZATION: {
-                glp_set_obj_dir(qdea, GLP_MIN);
+                set_minim(qdea);
             }
                 break;
             case LP_OPTIMIZATION: { ;
@@ -190,36 +195,45 @@ output_obj lp_glpk ( dea_obj * object ) {
             }
                 break;
         }
-        ret = glp_add_rows(qdea, nr);
 
         for (i = 0; i < nr; i++) {
             switch (rest[i]) {
                 case LTE: {
-                    glp_set_row_bnds(qdea, i + 1, GLP_UP, z8, rhs[i]);
+                    ret = set_constr_type(qdea,i+1,LE);
+                    if ( ret != TRUE ) {
+                        printf("qdea: set_constr_type failed : %d\n", ret);
+                    }
                 }
                     break;
                 case GTE: {
-                    glp_set_row_bnds(qdea, i + 1, GLP_LO, z8, rhs[i]);
+                    ret = set_constr_type(qdea,i+1,GE);
+                    if ( ret != TRUE ) {
+                        printf("qdea: set_constr_type failed : %d\n", ret);
+                    }
                 }
                     break;
                 default: { ;
                 }
                     break;
             }
+            ret = set_rh(qdea,i+1,rhs[i]);
+            if ( ret != TRUE ) {
+                printf("qdea: set_rh failed : %d\n", ret);
+            }
         }
 
-        ret = glp_add_cols(qdea, nc);
-
-        for (j = 0; j < nc; j++) {
-            glp_set_obj_coef(qdea, j + 1, objvals[j]);
-            glp_set_col_bnds(qdea, j + 1, GLP_LO, z8, z8);
+        for ( j = 0; j < nc; j++ ) {
+            ret = set_obj(qdea, j+1, objvals[j]);
+            if ( ret != TRUE ) {
+                printf("qdea: set_obj failed : %d\n", ret);
+            }
         }
 
         k = (nr*nc) + 1;
         ar = alloc_init_double_array((size_t) k, 0.0);
-        ia = alloc_init_int_array((size_t) k, 0);
-        ja = alloc_init_int_array((size_t) k, 0);
         ijconrowQ = alloc_init_int_array((size_t) nr * nc, 0);
+        iconrowQ = alloc_init_int_array((size_t) nr * nc, 0);
+        jconrowQ = alloc_init_int_array((size_t) nr * nc, 0);
 
         itmp = 0;
         kQ = 0;
@@ -227,23 +241,25 @@ output_obj lp_glpk ( dea_obj * object ) {
             for (j = 0; j < nc; j++) {
                 if (fabsf(A[i][j]) > EPS) {
                     kQ++;
-                    ia[kQ] = i + 1;
-                    ja[kQ] = j + 1;
                     ar[kQ] = (double) A[i][j];
-                    if (i + 1 == nDMUp1 && j + 1 > nY && j + 1 <= (nY + nX)) {
+                    if (i + 1 == nDMUp1 && j + 1  > nY && j + 1 <= (nY + nX)) {
                         ijconrowQ[itmp] = kQ;
+                        iconrowQ[itmp] = i+1;
+                        jconrowQ[itmp] = j+1;
                         itmp++;
+                    }
+                    ret = set_mat(qdea,i+1,j+1,ar[kQ]);
+                    if ( ret != TRUE ) {
+                        printf("qdea: set_mat failed : %d\n", ret);
                     }
                 }
             }
         }
         ijconrowQ = (int *) _resize(ijconrowQ, (size_t) itmp, sizeof(int));
-
-        glp_load_matrix(qdea, kQ, ia, ja, ar);
-        glp_init_smcp(&parmQ);
+        iconrowQ = (int *) _resize(iconrowQ, (size_t) itmp, sizeof(int));
+        jconrowQ = (int *) _resize(jconrowQ, (size_t) itmp, sizeof(int));
     }
 #endif
-
     jcount = 0;
 
     dmult = (double*)_alloc((size_t)nDMU, sizeof(double));
@@ -275,46 +291,57 @@ output_obj lp_glpk ( dea_obj * object ) {
         }
 
         for ( j = 0; j < nY+nX; j++ ) {
-            glp_set_obj_coef(dea, j + 1, objvalsD[j]);
-            glp_set_obj_coef(qdea, j + 1, objvals[j]);
+            ret = set_obj(dea,j+1,objvalsD[j]);
+            if ( ret != TRUE ) {
+                printf("dea dmu: set_obj failed : %d\n", ret);
+            }
+            ret = set_obj(qdea,j+1,objvals[j]);
+            if ( ret != TRUE ) {
+                printf("dea dmu: set_obj failed : %d\n", ret);
+            }
         }
 
         for ( j = 0; j < nX; j++ ) {
-            jtmp= nY + j ;
+            jtmp= nY + j;
             itmp = ijconrowD[j];
-
             arD[itmp] = AD[jDMU][jtmp] * (float)-1.0;
-
-            //printf("GLPK - jDMU: %d %d\nijconrowD: %d\njtmp: %d\narD[itmp] = %f\n", jDMU, j, ijconrowD[j], jtmp,arD[itmp]);
-
-            itmp = ijconrowQ[j];
-            ar[itmp] = A[jDMU][jtmp] * (float)-1.0;
-
-
-            //printf("GLPK - jDMU: %d %d\nijconrowQ: %d\njtmp: %d\nar[itmp] = %f\n", jDMU, j, ijconrowQ[j], jtmp,ar[itmp]);
-            //printf("\n");
-
+            ret = set_mat(dea,iconrowD[j],jconrowD[j],arD[itmp]);
+            if ( ret != TRUE ) {
+                printf("dea dmu: set_mat failed : %d\n", ret);
+            }
         }
 
-        //getchar();
+        for ( j = 0; j < nX; j++ ) {
+            jtmp= nY + j;
+            itmp = ijconrowQ[j]+1;
+            ar[itmp] = A[jDMU][jtmp] * (float)-1.0;
 
-        glp_load_matrix(dea, kD, iaD, jaD, arD);
-        glp_load_matrix(qdea, kQ, ia, ja, ar);
+            ret = set_mat(qdea,iconrowQ[j],jconrowQ[j],ar[itmp]);
+            if ( ret != TRUE ) {
+                printf("qdea dmu: set_mat failed : %d\n", ret);
+            }
+        }
 
-        ret = glp_simplex(dea, &parmD);
-        objD = glp_get_obj_val(dea);
+        ret = solve(dea);
+        if ( ret != OPTIMAL ) {
+            printf("dea solve: not OPTIMAL : %d\n", ret);
+        }
+        objD = get_objective(dea);
 
         EFFscores[jDMU][0] = objD;
 
-        ret = glp_simplex(qdea, &parmQ);
-        obj = glp_get_obj_val(qdea);
+        ret = solve(qdea);
+        obj = get_objective(qdea);
+        //if ( ret != OPTIMAL ) {
+        //    printf("qdea solve: not OPTIMAL : %d\n", ret);
+        //}
 
         EFFscores[jDMU][1] = obj;
 
-        for ( j = 0; j < nc; j++ ) {
-            soln[j] = glp_get_col_prim(qdea,j+1);
+        ret = get_variables(qdea,soln);
+        if ( ret != TRUE ) {
+            printf("qdea dmu: get_variables failed : %d\n", ret);
         }
-
         _init_double_array(dmult,(size_t)nDMU,0.0);
         _init_double_array(dvals,(size_t)nDMU,0.0);
         for ( i = 0, j = dstart; j < dend; j++, i++ ) {
@@ -357,16 +384,17 @@ output_obj lp_glpk ( dea_obj * object ) {
             }
         }
 
-        dea2 = glp_create_prob();
+        dea2 = make_lp(nrD2+1,ncD+1);
+        set_verbose(dea2,IMPORTANT);
 #if _DEA2
         {
             switch (objtype) {
                 case LP_MAXIMIZATION: {
-                    glp_set_obj_dir(dea2, GLP_MAX);
+                    set_maxim(dea2);
                 }
                     break;
                 case LP_MINIZATION: {
-                    glp_set_obj_dir(dea2, GLP_MIN);
+                    set_minim(dea2);
                 }
                     break;
                 case LP_OPTIMIZATION: { ;
@@ -376,29 +404,38 @@ output_obj lp_glpk ( dea_obj * object ) {
                 }
                     break;
             }
-            ret = glp_add_rows(dea2, nrD2);
 
             for (i = 0; i < nrD2; i++) {
                 switch (restD2[i]) {
                     case LTE: {
-                        glp_set_row_bnds(dea2, i + 1, GLP_UP, z8, rhsD2[i]);
+                        ret = set_constr_type(dea2,i+1,LE);
+                        if ( ret != TRUE ) {
+                            printf("dea2 dmu: set_constr_type failed : %d\n", ret);
+                        }
                     }
                         break;
                     case GTE: {
-                        glp_set_row_bnds(dea2, i + 1, GLP_LO, z8, rhsD2[i]);
+                        ret = set_constr_type(dea2,i+1,GE);
+                        if ( ret != TRUE ) {
+                            printf("dea2 dmu: set_constr_type failed : %d\n", ret);
+                        }
                     }
                         break;
                     default: { ;
                     }
                         break;
                 }
+                ret = set_rh(dea2,i+1,rhsD2[i]);
+                if ( ret != TRUE ) {
+                    printf("dea2 dmu: set_rh failed : %d\n", ret);
+                }
             }
 
-            ret = glp_add_cols(dea2, ncD);
-
-            for (j = 0; j < ncD; j++) {
-                glp_set_obj_coef(dea2, j + 1, objvalsD[j]);
-                glp_set_col_bnds(dea2, j + 1, GLP_LO, z8, z8);
+            for ( j = 0; j < ncD; j++ ) {
+                ret = set_obj(dea2, j+1, objvalsD[j]);
+                if ( ret != TRUE ) {
+                    printf("dea2 dmu: set_obj failed : %d\n", ret);
+                }
             }
 
             _init_double_array(arD2,(size_t)ndea2, 0.0);
@@ -412,27 +449,30 @@ output_obj lp_glpk ( dea_obj * object ) {
                         iaD2[kD2] = i + 1;
                         jaD2[kD2] = j + 1;
                         arD2[kD2] = (double) AD2[i][j];
-
+                        ret = set_mat(dea2,i+1,j+1,arD2[kD2]);
+                        if ( ret != TRUE ) {
+                            printf("dea2 dmu: set_mat failed : %d\n", ret);
+                        }
                     }
                 }
             }
-
-            glp_load_matrix(dea2, kD2, iaD2, jaD2, arD2);
-            glp_init_smcp(&parmD2);
         }
 #endif
-        ret = glp_simplex(dea2, &parmD2);
-        objD2 = glp_get_obj_val(dea2);
+        ret = solve(dea2);
+        if ( ret != OPTIMAL ) {
+            printf("dea2 solve: not OPTIMAL : %d\n", ret);
+        }
+        objD2=get_objective(dea2);
         EFFscores[jDMU][2] = objD2;
 
-        glp_delete_prob(dea2);
+        delete_lp(dea2);
 
         jcount=jcount+1;
 
         if (jcount == 50) {
             t3 = clock();
             file = fopen("fortran-report.txt", "a");
-            fprintf(file, "glpk jDMU, runtimes = %d %lf %lf\n", jDMU,(double)(t3 - t2) / CLOCKS_PER_SEC,(double)(t3 - t1) / CLOCKS_PER_SEC);
+            fprintf(file, "lpsolve jDMU, runtimes = %d %lf %lf\n", jDMU,(double)(t3 - t2) / CLOCKS_PER_SEC,(double)(t3 - t1) / CLOCKS_PER_SEC);
             fclose(file);
         }
     }
@@ -443,7 +483,7 @@ output_obj lp_glpk ( dea_obj * object ) {
     runtimes[1] = (double)(t3 - t2) / CLOCKS_PER_SEC;
 
     file = fopen("fortran-report.txt", "a");
-    fprintf(file, "glpk jDMU, runtimes = %d %lf %lf\n", jDMU,(double)(t3 - t2) / CLOCKS_PER_SEC,(double)(t3 - t1) / CLOCKS_PER_SEC);
+    fprintf(file, "lpsolve jDMU, runtimes = %d %lf %lf\n", jDMU,(double)(t3 - t2) / CLOCKS_PER_SEC,(double)(t3 - t1) / CLOCKS_PER_SEC);
     fclose(file);
 
     if (restD) {
@@ -461,23 +501,11 @@ output_obj lp_glpk ( dea_obj * object ) {
     if (arD) {
         _free(arD);
     }
-    if (iaD) {
-        _free(iaD);
-    }
-    if (jaD) {
-        _free(jaD);
-    }
     if (ijconrowD) {
         _free(ijconrowD);
     }
     if (ar) {
         _free(ar);
-    }
-    if (ia) {
-        _free(ia);
-    }
-    if (ja) {
-        _free(ja);
     }
     if (dmult) {
         _free(dmult);
@@ -506,9 +534,24 @@ output_obj lp_glpk ( dea_obj * object ) {
     if (ijconrowQ) {
         _free(ijconrowQ);
     }
-    glp_delete_prob(dea);
-    glp_delete_prob(qdea);
-    glp_free_env();
+    if (iconrowQ) {
+        _free(iconrowQ);
+    }
+    if (jconrowQ) {
+        _free(jconrowQ);
+    }
+    if (iconrowD) {
+        _free(iconrowD);
+    }
+    if (jconrowD) {
+        _free(jconrowD);
+    }
+    if(dea != NULL) {
+        delete_lp(dea);
+    }
+    if(qdea != NULL) {
+        delete_lp(qdea);
+    }
 
     return output;
 }

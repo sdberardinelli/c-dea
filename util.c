@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "util.h"
 #include "def.h"
@@ -115,42 +114,42 @@ void* _resize(void *a, size_t n, size_t t) {
 
 void _init_int_array(int *a, size_t n, int value) {
     int i;
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         a[i] = value;
     }
 }
 
 void _init_float_array(float *a, size_t n, float value) {
     int i;
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         a[i] = value;
     }
 }
 
 void _init_double_array(double *a, size_t n, double value) {
     int i;
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         a[i] = value;
     }
 }
 
 void _init_float_array2d(float **a, size_t n, size_t m, float value) {
     int i;
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         _init_float_array(a[i],m,value);
     }
 }
 
 void _init_double_array2d(double **a, size_t n, size_t m, double value) {
     int i;
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         _init_double_array(a[i],m,value);
     }
 }
 
 void _init_int_array2d(int **a, size_t n, size_t m, int value) {
     int i;
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         _init_int_array(a[i],m,value);
     }
 }
@@ -166,7 +165,7 @@ void** _alloc2d ( size_t n, size_t m, size_t t) {
     int i;
     void ** arr;
     arr = malloc(n*m*t);
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         arr[i] = _alloc(m,t);
     }
     return arr;
@@ -174,7 +173,7 @@ void** _alloc2d ( size_t n, size_t m, size_t t) {
 
 void _free2d ( void ** a, size_t n) {
     int i;
-    for ( i = 0; i < n; i++ ) {
+    for ( i = 0; i < (int)n; i++ ) {
         _free(a[i]);
     }
     _free((void*)a);
@@ -251,14 +250,14 @@ void display_dea_obj( dea_obj * obj ) {
     }
     printf("%d\n", obj->ncons);
     if (obj->rest) {
-        for (i = 0; i < obj->nobjvals; i++) {
+        for (i = 0; i < obj->ncons; i++) {
             switch ( obj->rest[i] )
             {
                 case LTE: { printf("<="); } break;
                 case GTE: { printf(">="); } break;
-                case LT: { printf("<"); } break;
-                case GT: { printf(">"); } break;
-                case EQ: { printf("=="); } break;
+                case LST: { printf("<"); } break;
+                case GRT: { printf(">"); } break;
+                case EQUAL: { printf("=="); } break;
                 default: { printf("??"); } break;
             }
             printf(" ");
@@ -423,13 +422,13 @@ dea_obj process_file(const char* filename) {
                             obj.rest[j] = GTE;
                         }
                         else if (strcmp(arr[j], "\">\"") == 0) {
-                            obj.rest[j] = GT;
+                            obj.rest[j] = GRT;
                         }
                         else if (strcmp(arr[j], "\"<\"") == 0) {
-                            obj.rest[j] = LT;
+                            obj.rest[j] = LST;
                         }
                         else if (strcmp(arr[j], "\"==\"") == 0) {
-                            obj.rest[j] = EQ;
+                            obj.rest[j] = EQUAL;
                         }
                     }
                 }
